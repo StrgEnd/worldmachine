@@ -6,12 +6,37 @@ class Cell:
     def __init__(self, type_="empty", age=0):
         self.type = type_
         self.age = age
+        self.timer = 0
 
 class World:
     def __init__(self, width, height):
         self.width = width
         self.height = height
         self.grid = [[Cell() for _ in range(height)] for _ in range(width)]
+        self.last_strike = time.time()
+
+    def strike_lightning(self):
+        # Suche zufälligen Baum als Zentrum
+        attempts = 0
+        while attempts < 10:
+            x = random.randint(2, self.width - 3)
+            y = random.randint(2, self.height - 3)
+            if self.grid[x][y].type == "tree":
+                break
+            attempts += 1
+        else:
+            return # Kein Baum gefunden
+        
+        # Zünde 3-5 nahe Bäume an (pending_fire)
+        for _ in range(random.randint(3, 5)):
+            dx = random.randint(-1, 1)
+            dy = random.randint(-1, 1)
+            nx, ny = x + dx, y + dy
+            if 0 <= nx < self.width and 0 <= ny < self.height:
+                cell = self.grid[nx][ny]
+                if cell.type == "tree":
+                    cell.type = "pending_fire"
+                    cell.timer = 10
 
     def set_cell(self, x, y, type_):
         self.grid[x][y] = Cell(type_)
@@ -93,5 +118,19 @@ class World:
                     else:
                         new_grid[x][y] = Cell("burned", age)
 
+                elif cell.type == "pending_fire":
+                    cell.timer -= 1
+                    if cell.timer <= 0:
+                        new_grid[x][y] = Cell("fire", age=0)
+                    else:
+                        # bleibt pending_fire mit reduziertem Timer
+                        new_cell = Cell("pending_fire")
+                        new_cell.timer = cell.timer
+                        new_grid[x][y] = new_cell
 
         self.grid = new_grid
+
+        now = time.time()
+        if now - self.last_strike > 5:  # alle 5 Sekunden ein Blitz
+            self.strike_lightning()
+            self.last_strike = now

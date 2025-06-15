@@ -33,6 +33,15 @@ while running:
                 selected_type = "rock"
             elif event.key == pygame.K_4:
                 selected_type = "fire"
+            elif event.key == pygame.K_5:
+                selected_type = "water"
+
+    # Linke Maustaste gedrückt halten
+    mouse_buttons = pygame.mouse.get_pressed()
+    if mouse_buttons[0]:  # Linke Maustaste gedrückt
+        mx, my = pygame.mouse.get_pos()
+        gx, gy = mx // CELL_SIZE, my // CELL_SIZE
+        world.set_cell(gx, gy, selected_type)
 
     # Update
     world.update()

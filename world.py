@@ -45,7 +45,22 @@ class World:
                         new_grid[x][y] = Cell("tree")
     
                 elif cell.type == "fire":
-                # Feuer breitet sich auf Nachbarn aus
+                    # Feuer stribt bei berührung mit Wasser + 2
+                    has_water_neighbor = False
+                    for dx in range(-2, 3):
+                        for dy in range(-2, 3):
+                            if dx == 0 and dy == 0:
+                                continue
+                            nx, ny = x + dx, y + dy
+                            if 0 <= nx < self.width and 0 <= ny < self.height:
+                                if self.grid[nx][ny].type == "water":
+                                    has_water_neighbor = True
+
+                    if has_water_neighbor:
+                        new_grid[x][y] = Cell("burned", age=0)  # Feuer stirbt sofort
+                        continue  # Rest der Feuerlogik überspringen
+
+                    # Feuer breitet sich auf Nachbarn aus
                     for dx in [-1, 0, 1]:
                         for dy in [-1, 0, 1]:
                             if dx == 0 and dy == 0:

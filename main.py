@@ -23,12 +23,16 @@ while running:
                 world.set_cell(gx, gy, selected_type)
 
         # Taste zum Typwechsel
-        # 1: leeren, 2: Baum 
+        # 1: leeren, 2: Baum, 3: Stein, 4: Feuer
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_1:
                 selected_type = "empty"
             elif event.key == pygame.K_2:
                 selected_type = "tree"
+            elif event.key == pygame.K_3:
+                selected_type = "rock"
+            elif event.key == pygame.K_4:
+                selected_type = "fire"
 
     # Update
     world.update()

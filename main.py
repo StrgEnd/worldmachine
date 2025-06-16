@@ -55,7 +55,18 @@ while running:
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
             rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-            color = COLORS[world.grid[x][y].type]
+            cell = world.grid[x][y]
+            
+            # Spezielle Behandlung für Tiere mit Herdenlogik
+            if cell.type in ["animal", "animal_sick"]:
+                if hasattr(cell, 'is_leader') and cell.is_leader:
+                    # Herdenanführer werden dunkler dargestellt
+                    color = COLORS["animal_leader"]
+                else:
+                    color = COLORS[cell.type]
+            else:
+                color = COLORS[cell.type]
+            
             pygame.draw.rect(screen, color, rect)
     pygame.display.flip()
     clock.tick(TICK_SPEED) # Tick speed

@@ -9,6 +9,8 @@ class Cell:
         self.timer = 0
         self.below = None
         self.disease_timer = 0  # Für Krankheitsdauer
+        self.hunger = 0
+        self.thirst = 0
 
 class World:
     def __init__(self, width, height):
@@ -39,6 +41,36 @@ class World:
                 if cell.type == "tree":
                     cell.type = "pending_fire"
                     cell.timer = 10
+    
+    def grow_berries(self, new_grid):
+        for start_x in range(0, self.width, 5):
+            for start_y in range(0, self.height, 5):
+                trees = []
+                berries = []
+
+                # sammel Bäume und Beeren im Bereich
+                for dx in range(5):
+                    for dy in range(5):
+                        x = start_x + dx
+                        y = start_y + dy
+                        if x >= self.width or y >= self.height:
+                            continue
+                        cell = self.grid[x][y]
+                        if cell.type == "tree":
+                            trees.append((x,y))
+                        elif cell.type == "berry":
+                            berries.append((x,y))
+                
+                # max erlaubte Beeren in diesem Bereich
+                max_berries = int(len(trees)) * BERRIES_PER_TREE_RATIO
+
+                # wenn noch Platz für Beeren, wähle zufällig Stellen aus
+                missing = max(0, int(max_berries - len(berries)))
+                if missing > 0:
+                    available = trees.copy()
+                    random.shuffle(available)
+                    for x, y in available[:missing]:
+                        new_grid[x][y] = Cell("berry")
 
     def set_cell(self, x, y, type_):
         if 0 <= x < self.width and 0 <= y < self.height:
@@ -68,12 +100,17 @@ class World:
                             if 0 <= nx < self.width and 0 <= ny < self.height:
                                 neighbor = self.grid[nx][ny]
                                 if neighbor.type == "tree":
-                                    tree_neighbors += 1
-                    
+                                    tree_neighbors += 1    
+
                     # Wenn Nachbarbäume vorhanden und Zufall greift
                     if tree_neighbors > 0 and random.random() < GROWTH_PROBABILITY:
                         new_grid[x][y] = Cell("tree")
-    
+
+                elif cell.type == "tree":
+                    if random.random() < 0.001:
+                        new_grid[x][y] = Cell("berry")
+
+
                 elif cell.type == "fire":
                     # Feuer stribt bei berührung mit Wasser + 2
                     has_water_neighbor = False
@@ -99,6 +136,10 @@ class World:
                             if 0 <= nx < self.width and 0 <= ny < self.height:
                                 neighbor = self.grid[nx][ny]
                                 if neighbor.type == "tree": 
+                                    if self.grid[nx][ny].type != "rock" and random.random() < FIRE_SPREAD_PROBABILITY:
+                                        new_grid[nx][ny] = Cell("fire")
+
+                                if neighbor.type == "berry": 
                                     if self.grid[nx][ny].type != "rock" and random.random() < FIRE_SPREAD_PROBABILITY:
                                         new_grid[nx][ny] = Cell("fire")
 
@@ -218,7 +259,45 @@ class World:
         # Tierbewegung
         for x, y in animal_positions:
             cell = self.grid[x][y]
+
+            # Wenn Tier in der Nähe von Wasser ist, trinkt es
+            cell.thirst += 1
+
+            near_water = False
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height:
+                        if self.grid[nx][ny].type == "water":
+                            near_water = True
+                            break
             
+            if near_water:
+                cell.thirst = 0 # Tier hat getrunken
+
+            # Wenn Durst zu groß wird sterben
+            if cell.thirst > MAX_THIRST:
+                new_grid[x][y] = Cell(cell.below if cell.below else "empty")
+                continue
+
+            cell.hunger += 1
+
+            # In der Nähe von Beeren essen
+            near_food = False
+            for dx in [-1, 0, 1]:
+                for dy in [-1, 0, 1]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < self.width and 0 <= ny < self.height:
+                        if self.grid[nx][ny].type == "berry":
+                            new_grid[nx][ny] = Cell("tree")
+                            cell.hunger = 0
+                            near_food = True
+                            break
+            if cell.hunger > MAX_HUNGER:
+                new_grid[x][y] = Cell(cell.below if cell.below else "empty")
+                continue
+
+
             # Überprüfen ob Tier auf Feuer steht
             if hasattr(cell, 'below') and cell.below == "fire":
                 new_grid[x][y] = Cell("burned")
@@ -244,37 +323,68 @@ class World:
                     new_animal.disease_timer = cell.disease_timer
                 new_grid[x][y] = new_animal
                 continue
-
-            best_score = float("-inf")
+            
+            target_found = False
             best_pos = (x, y)
 
-            for dx in [-1, 0, 1]:
-                for dy in [-1, 0, 1]:
-                    if dx == 0 and dy == 0:
-                        continue
+            # Wenn sehr hungrig: gezielt nach beeren suchen
+            if cell.hunger > START_HUNGER:
+                closest_berry = None
+                closest_dist = float("inf")
+
+                for dx in range(-5, 6):
+                    for dy in range(-5, 6):
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < self.width and 0 <= ny < self.height:
+                            if self.grid[nx][ny].type == "berry":
+                                dist = abs(dx) + abs(dy)
+                                if dist < closest_dist:
+                                    closest_dist = dist
+                                    closest_berry = (nx, ny)
+                
+                if closest_berry:
+                    tx, ty = closest_berry
+                    # nächster Schritt in Richtung Beere
+                    dx = int((tx - x) / max(1, abs(tx - x))) if tx != x else 0
+                    dx = int((ty - y) / max(1, abs(ty - y))) if ty != y else 0
                     nx, ny = x + dx, y + dy
                     if 0 <= nx < self.width and 0 <= ny < self.height:
-                        target = self.grid[nx][ny]
-                        target_new = new_grid[nx][ny]
-
-                        if target.type in ["fire", "water"] or target_new.type in ["animal", "animal_sick"]:
-                            continue
-                        
-                        score = 0
-                        for ddx in [-2, -1, 0, 1, 2]:
-                            for ddy in [-2, -1, 0, 1, 2]:
-                                tx, ty = nx + ddx, ny + ddy
-                                if 0 <= tx < self.width and 0 <= ty < self.height:
-                                    tcell = self.grid[tx][ty]
-                                    if tcell.type == "water":
-                                        score += 1
-                                    elif tcell.type == "fire":
-                                        score -= 3
-
-                        score += random.uniform(-0.5, 0.5)
-                        if score > best_score:
-                            best_score = score
+                        if new_grid[nx][ny].type in ["empty","tree"]:
                             best_pos = (nx, ny)
+                            target_found = True
+
+            # Normales Verhalten
+            if not target_found:
+                best_score = float("-inf")
+                for dx in [-1, 0, 1]:
+                    for dy in [-1, 0, 1]:
+                        if dx == 0 and dy == 0:
+                            continue
+                        nx, ny = x + dx, y + dy
+                        if 0 <= nx < self.width and 0 <= ny < self.height:
+                            target = self.grid[nx][ny]
+                            target_new = new_grid[nx][ny]
+                            if target.type in ["fire","water"] or target_new.type.startswith("animal"):
+                                continue
+
+                            score = 0
+                            for ddx in range(-2, 3):
+                                for ddy in range(-2, 3):
+                                    tx, ty = nx + ddx, ny + ddy
+                                    if 0 <= tx < self.width and 0 <= ty < self.height:
+                                        tcell = self.grid[tx][ty]
+                                        if tcell.type == "fire":
+                                            score -= 3
+                                        elif cell.thirst > START_THIRST and tcell.type == "water":
+                                            score += 3
+                            
+                            score += random.uniform(-0.5, 0.5)
+
+                            if score > best_score:
+                                best_score = score
+                                best_pos = (nx, ny)
+            
+
 
             # Bewegung ausführen
             if best_pos != (x, y):
@@ -326,6 +436,8 @@ class World:
                 new_grid[bx][by] = baby
 
         self.grid = new_grid
+
+        self.grow_berries(new_grid)
 
         now = time.time()
         if now - self.last_strike > 5:  # alle 5 Sekunden ein Blitz

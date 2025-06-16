@@ -23,7 +23,7 @@ while running:
                 world.set_cell(gx, gy, selected_type)
 
         # Taste zum Typwechsel
-        # 1: leeren, 2: Baum, 3: Stein, 4: Feuer, 5: Wasser, 6: Tier
+        # 1: leeren, 2: Baum, 3: Stein, 4: Feuer, 5: Wasser, 6: Tier, 7: Beere
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_1:
                 selected_type = "empty"
@@ -37,6 +37,8 @@ while running:
                 selected_type = "water"
             elif event.key == pygame.K_6:
                 selected_type = "animal"
+            elif event.key == pygame.K_7:
+                selected_type = "berry"
 
     # Linke Maustaste gedrückt halten
     mouse_buttons = pygame.mouse.get_pressed()

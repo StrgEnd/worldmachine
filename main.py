@@ -23,7 +23,7 @@ while running:
                 world.set_cell(gx, gy, selected_type)
 
         # Taste zum Typwechsel
-        # 1: leeren, 2: Baum, 3: Stein, 4: Feuer, 5: Wasser, 6: Tier
+        # 1: leeren, 2: Baum, 3: Stein, 4: Feuer, 5: Wasser, 6: Tier, 7: Beere
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_1:
                 selected_type = "empty"
@@ -37,6 +37,8 @@ while running:
                 selected_type = "water"
             elif event.key == pygame.K_6:
                 selected_type = "animal"
+            elif event.key == pygame.K_7:
+                selected_type = "berry"
 
     # Linke Maustaste gedrückt halten
     mouse_buttons = pygame.mouse.get_pressed()
@@ -53,7 +55,18 @@ while running:
     for x in range(GRID_WIDTH):
         for y in range(GRID_HEIGHT):
             rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-            color = COLORS[world.grid[x][y].type]
+            cell = world.grid[x][y]
+            
+            # Spezielle Behandlung für Tiere mit Herdenlogik
+            if cell.type in ["animal", "animal_sick"]:
+                if hasattr(cell, 'is_leader') and cell.is_leader:
+                    # Herdenanführer werden dunkler dargestellt
+                    color = COLORS["animal_leader"]
+                else:
+                    color = COLORS[cell.type]
+            else:
+                color = COLORS[cell.type]
+            
             pygame.draw.rect(screen, color, rect)
     pygame.display.flip()
     clock.tick(TICK_SPEED) # Tick speed

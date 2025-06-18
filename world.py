@@ -45,6 +45,38 @@ class World:
         self.herds = {}
         self.next_herd_id = 1
 
+        self.berry_position = set()
+        self.water_position = set()
+        self.update_resource_cache()
+
+    def update_resource_cache(self):
+        # Erstellt Cache aller Beeren- und Wasserpositionen
+        self.berry_position.clear()
+        self.water_position.clear()
+
+        for x in range(self.width):
+            for y in range(self.height):
+                cell_type = self.grid[x][y].type
+                if cell_type == "berry":
+                    self.berry_position.add((x, y))
+                elif cell_type == "water":
+                    self.water_position.add((x, y))
+    
+    def find_closest_resource(self, pos, resource_positions, max_distance=5):
+        # Effiziente Suche nach nächster Ressource
+        x, y = pos
+        closest_pos = None
+        min_distance =float("inf")
+
+        # Nur durch bekannte Ressourcenpositionen iterieren statt durch alle Zellen
+        for rx, ry in resource_positions:
+            distance = abs(x - rx) + abs(y - ry)
+            if distance <= max_distance and distance < min_distance:
+                min_distance = distance
+                closest_pos = (rx, ry)
+        
+        return closest_pos
+
     def create_new_herd(self, leader_pos):
         herd_id = self.next_herd_id
         self.next_herd_id += 1
@@ -163,6 +195,13 @@ class World:
 
     def set_cell(self, x, y, type_):
         if 0 <= x < self.width and 0 <= y < self.height:
+            old_type = self.grid[x][y].type
+
+            if old_type == "berry":
+                self.berry_position.discard((x, y))
+            elif old_type == "water":
+                self.water_position.discard((x, y))
+            
             if type_ == "animal":
                 # Neues Tier wird Anführer einer neuen Herde
                 cell = Cell(type_)
@@ -172,11 +211,20 @@ class World:
                 self.grid[x][y] = cell
             else:
                 self.grid[x][y] = Cell(type_)
+
+            if type_ == "berry":
+                self.berry_position.add((x, y))
+            elif type_ == "water":
+                self.water_position.add((x, y))
+
         else:
             print(f"Ignoriert Klick außerhalb der Welt: ({x}, {y})")
 
     def update(self):
         new_grid = [[Cell(cell.type, cell.age) for cell in row] for row in self.grid]
+
+        berry_changes = set()
+        water_changes = set()
 
         for x in range(self.width):
             for y in range(self.height):
@@ -271,12 +319,9 @@ class World:
                         new_cell.timer = cell.timer
                         new_grid[x][y] = new_cell
 
-        # Krankheitssystem - Übertragung und Entstehung
-        for x in range(self.width):
-            for y in range(self.height):
-                cell = self.grid[x][y]
+                # Krankheitssystem - Übertragung und Entstehung
                 
-                if cell.type == "animal":
+                elif cell.type == "animal":
                     # Zähle Tiere in 5x5 Bereich
                     animal_count = 0
                     for dx in range(-2, 3):
@@ -385,6 +430,7 @@ class World:
 
             # Wenn Tier in der Nähe von Wasser ist, trinkt es
             cell.thirst += 1
+            cell.hunger += 1
 
             near_water = False
             for dx in [-1, 0, 1]:
@@ -405,7 +451,6 @@ class World:
                 new_grid[x][y] = Cell(cell.below if cell.below else "empty")
                 continue
 
-            cell.hunger += 1
 
             # In der Nähe von Beeren essen
             near_food = False
@@ -417,6 +462,7 @@ class World:
                             new_grid[nx][ny] = Cell("tree")
                             cell.hunger = 0
                             near_food = True
+                            berry_changes.add((nx, ny))
                             break
 
             if cell.hunger > MAX_HUNGER:
@@ -504,17 +550,7 @@ class World:
 
             # Priorität 1: Hunger und Durst (überwiegt Herdentrieb)
             if cell.hunger > START_HUNGER:
-                closest_berry = None
-                closest_dist = float("inf")
-                for dx in range(-5, 6):
-                    for dy in range(-5, 6):
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < self.width and 0 <= ny < self.height:
-                            if self.grid[nx][ny].type == "berry":
-                                dist = abs(dx) + abs(dy)
-                                if dist < closest_dist:
-                                    closest_dist = dist
-                                    closest_berry = (nx, ny)
+                closest_berry = self.find_closest_resource((x, y), self.berry_position, max_distance=5)
                 
                 if closest_berry:
                     tx, ty = closest_berry
@@ -527,18 +563,8 @@ class World:
                         target_found = True
 
             if cell.thirst > START_THIRST and not target_found:
-                closest_water = None
-                closest_dist = float("inf")
-                for dx in range(-5, 6):
-                    for dy in range(-5, 6):
-                        nx, ny = x + dx, y + dy
-                        if 0 <= nx < self.width and 0 <= ny < self.height:
-                            if self.grid[nx][ny].type == "water":
-                                dist = abs(dx) + abs(dy)
-                                if dist < closest_dist:
-                                    closest_dist = dist
-                                    closest_water = (nx, ny)
-                
+                closest_water = self.find_closest_resource((x, y), self.water_position, max_distance=5)
+
                 if closest_water:
                     tx, ty = closest_water
                     dx = 1 if tx > x else (-1 if tx < x else 0)
@@ -682,6 +708,18 @@ class World:
                 new_grid[bx][by] = baby
 
         self.grid = new_grid
+
+        for pos in berry_changes:
+            self.berry_position.discard(pos)
+
+        # Vollständige Cache-Aktualisierung alle 10 Ticks
+        if hasattr(self, "cache_update_counter"):
+            self.cache_update_counter += 1
+        else:
+            self.cache_update_counter = 0
+        
+        if self.cache_update_counter % 10 == 0:
+            self.update_resource_cache()
 
         self.merge_herds_if_close()
         self.cleanup_empty_herds()
